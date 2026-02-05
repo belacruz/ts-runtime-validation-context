@@ -1,73 +1,82 @@
-export type ParseResult<T> =
+type ParseResult<T> =
   | { success: true; value: T }
   | { success: false; error: string };
 
-export interface Schema<T> {
+interface Schema<T> {
   parse(value: unknown): ParseResult<T>;
 }
 
-export type ShapeToType<S extends Record<string, Schema<unknown>>> = {
-  [K in keyof S]: S[K] extends Schema<infer T> ? T : never;
-};
-
-export type ParsedField<T> =
-  | { key: string; success: false; error: string }
-  | { key: string; success: true; value: T };
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
+export type ShapeToType<S> =
+  S extends Schema<infer T>
+    ? T
+    : {
+        [K in keyof S]: S[K] extends Schema<infer T>
+          ? T
+          : S[K] extends Record<string, unknown>
+            ? ShapeToType<S[K]>
+            : never;
+      };
 
-export const string = (): Schema<string> => ({
-  parse(value) {
-    return typeof value === 'string'
-      ? { success: true, value }
-      : { success: false, error: 'String Expected' };
-  },
-});
+type NestedShape = {
+  [k: string]: Schema<unknown> | NestedShape;
+};
 
-export const number = (): Schema<number> => ({
-  parse(value) {
-    return typeof value === 'number'
-      ? { success: true, value }
-      : { success: false, error: 'Number Expected' };
-  },
-});
+type ParsedField<T> =
+  | { key: string; success: true; value: T }
+  | { key: string; success: false; error: string };
 
-export const boolean = (): Schema<boolean> => ({
-  parse(value) {
-    return typeof value === 'boolean'
-      ? { success: true, value }
-      : { success: false, error: 'Boolean Expected' };
-  },
-});
+function isSchema(value: unknown): value is Schema<unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'parse' in value &&
+    typeof (value as { parse?: unknown }).parse === 'function'
+  );
+}
 
-export function object<S extends Record<string, Schema<unknown>>>(
+export function object<S extends NestedShape>(
   shape: S,
 ): Schema<ShapeToType<S>> {
   return {
     parse(value) {
       if (!isRecord(value)) {
-        return { success: false, error: 'Expected object' };
+        return { success: false, error: 'Object Expected' };
       }
 
       const parsedFields: ParsedField<unknown>[] = [];
 
       for (const key in shape) {
-        const parsed = shape[key].parse(value[key]);
+        const field = shape[key];
 
-        if (!parsed.success) {
-          parsedFields.push({ key, success: false, error: parsed.error });
-          continue;
+        if (isSchema(field)) {
+          const parsed = field.parse(value[key]);
+          if (!parsed.success) {
+            parsedFields.push({ key, success: false, error: parsed.error });
+            continue;
+          }
+          parsedFields.push({ key, success: true, value: parsed.value });
+        } else {
+          const nestedResult = object(field).parse(value[key]);
+
+          if (!nestedResult.success) {
+            parsedFields.push({
+              key,
+              success: false,
+              error: nestedResult.error,
+            });
+            continue;
+          }
+          parsedFields.push({ key, success: true, value: nestedResult.value });
         }
-
-        parsedFields.push({ key, success: true, value: parsed.value });
       }
 
       const failed = parsedFields.find((f) => f.success === false);
 
       if (failed) {
-        return { success: false, error: `Invalid field "${failed.key}"` };
+        return { success: false, error: `Invalid field "${failed.key}` };
       }
 
       const finalObject = parsedFields.reduce(
@@ -79,8 +88,27 @@ export function object<S extends Record<string, Schema<unknown>>>(
         },
         {} as Record<string, unknown>,
       );
-
       return { success: true, value: finalObject as ShapeToType<S> };
     },
   };
 }
+
+export const string = (): Schema<string> => {
+  return {
+    parse(value) {
+      return typeof value === 'string'
+        ? { success: true, value }
+        : { success: false, error: 'String Expected' };
+    },
+  };
+};
+
+export const number = (): Schema<number> => {
+  return {
+    parse(value) {
+      return typeof value === 'number'
+        ? { success: true, value }
+        : { success: false, error: 'Number Expected' };
+    },
+  };
+};

@@ -6,43 +6,48 @@ interface FetchState<T> {
   error: string | null;
 }
 
-const useFetch = <T,>(url: string, options?: RequestInit): FetchState<T> => {
+const useFetch = <T,>(
+  url: RequestInfo | URL | null,
+  options?: RequestInit,
+): FetchState<T> => {
   const [data, setData] = React.useState<T | null>(null);
   const [loading, setLoading] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
 
   const optionsRef = React.useRef(options);
 
-  optionsRef.current = options;
+  React.useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
 
   React.useEffect(() => {
     const controller = new AbortController();
 
-    async function fetchData() {
+    async function fetchURL() {
+      if (!url) return;
+      setLoading(true);
+      setData(null);
+      setError(null);
       try {
-        setLoading(true);
-        const result = await fetch(url, {
+        const response = await fetch(url, {
           ...optionsRef.current,
           signal: controller.signal,
         });
-        const json = await result.json();
+        if (!response.ok) throw new Error(`Erro: ${response.status}`);
+        const json = await response.json();
         if (!controller.signal.aborted) setData(json);
       } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError')
-          return;
-        if (error instanceof Error) setError(error.message);
+        if (!controller.signal.aborted && error instanceof Error)
+          setError(error.message);
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
-
-    fetchData();
-
+    fetchURL();
     return () => {
       controller.abort();
     };
   }, [url]);
-
   return { data, loading, error };
 };
 

@@ -1,20 +1,29 @@
-import {
-  object,
-  string,
-  number,
-  boolean,
-  type ShapeToType,
-} from './schemaCore.ts';
+import { number, object, string, type ShapeToType } from './SchemaCore.ts';
 
-export const userSchema = {
-  id: string(),
+export const UserShape = {
+  id: number(),
   nome: string(),
-  preco: number(),
-  quantidade: number(),
-  descricao: string(),
-  internacional: boolean(),
+  aulas: number(),
+  cursos: number(),
 };
 
-export const userSchemaValidation = object(userSchema);
+export const UserContentShape = {
+  id: number(),
+  nome: string(),
+  idade: number(),
+  aulas: number(),
+  cursos: number(),
+  preferencias: {
+    playback: number(),
+    volume: number(),
+    qualidade: string(),
+  },
+};
 
-export type User = ShapeToType<typeof userSchema>;
+export type User = ShapeToType<typeof UserShape>;
+
+export const UserShapeValidado = object(UserShape);
+
+export type UserContent = ShapeToType<typeof UserContentShape>;
+
+export const UserContentValidado = object(UserContentShape);
