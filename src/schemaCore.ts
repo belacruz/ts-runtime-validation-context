@@ -76,7 +76,7 @@ export function object<S extends NestedShape>(
       const failed = parsedFields.find((f) => f.success === false);
 
       if (failed) {
-        return { success: false, error: `Invalid field "${failed.key}` };
+        return { success: false, error: `Invalid field "${failed.key}"` };
       }
 
       const finalObject = parsedFields.reduce(
